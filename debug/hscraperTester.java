@@ -1,10 +1,12 @@
 package main.debug;
 import main.trainer.hscraper2;
+import main.Scraper;
 
 public class hscraperTester{
     public static void main(String[] args)
     {
         hscraper2 scraper = new hscraper2("https://www.huffpost.com/entry/police-fecal-sandwich-homeless_n_581cb9c0e4b0e80b02c97652");
+        //Scraper scraper = new Scraper("https://edition.cnn.com/2025/05/09/uk/sycamore-gap-trees-con");
 
             String scrapedContent = scraper.scrape();
             if (scrapedContent != null) {

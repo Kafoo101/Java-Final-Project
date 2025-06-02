@@ -27,7 +27,6 @@ public class DatabaseManager {
             }
         } catch (SQLException e) {
             System.err.println("Error fetching next NewsID");
-            e.printStackTrace();
             return null;
         }
     }
@@ -77,31 +76,44 @@ public class DatabaseManager {
 
             } catch (SQLException e) {
                 System.err.println("Error adding to category table: " + tableName);
-                e.printStackTrace();
             }
         }
     }
 
-    public static void deleteNewsFromCategory(String newsID, String[] categories) {
-        for(String category : categories) {
+    public static void addNewsToCategoryTable(String newsID, String category) {
+        String tableName = category.toLowerCase().replaceAll("\\s+", "").replaceAll("[^a-z0-9_]", "");
+        String sql = "INSERT INTO " + tableName + " (NewsID) VALUES (?)";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql)) {
             
-            String tableName = category.toLowerCase().replaceAll("\\s+", "").replaceAll("[^a-z0-9_]", "");
+            stmt.setString(1, newsID);
+            int affected = stmt.executeUpdate();
+            System.out.println("Added to category table: " + tableName);
 
-            String sql = "DELETE FROM " + tableName + " WHERE NewsID = ?";
-
-            try(Connection conn = DatabaseConnection.getConnection();
-                PreparedStatement stmt = conn.prepareStatement(sql)) {
-                    
-                stmt.setString(1, newsID);
-                int affected = stmt.executeUpdate();
-                System.out.println("Delete from category table: " + tableName + " (rows affected: " + affected + ")");
-
-            } catch(SQLException e) {
-                System.err.println("Error deleting from category table: " + tableName);
-                e.printStackTrace();
-            }
+        } catch (SQLException e) {
+            System.err.println("Error adding to category table: " + tableName);
+            e.printStackTrace();
         }
     }
+
+    public static void deleteNewsFromCategory(String newsID, String category) {
+        String tableName = category.toLowerCase().replaceAll("\\s+", "").replaceAll("[^a-z0-9_]", "");
+        String sql = "DELETE FROM " + tableName + " WHERE NewsID = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newsID);
+            int affected = stmt.executeUpdate();
+            System.out.println("Delete from category table: " + tableName + " (rows affected: " + affected + ")");
+
+        } catch (SQLException e) {
+            System.err.println("Error deleting from category table: " + tableName);
+            e.printStackTrace();
+        }
+    }
+
 
     public static String takeNewsURL(String newsID) {
         String sql = "SELECT URL FROM news WHERE NewsID = ?";
@@ -120,7 +132,6 @@ public class DatabaseManager {
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving URL for NewsID: " + newsID);
-            e.printStackTrace();
             return null;
         }
     }
@@ -142,7 +153,27 @@ public class DatabaseManager {
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving Title for NewsID: " + newsID);
-            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public static String takeNewsID(String url) {
+        String sql = "SELECT NewsID FROM news WHERE URL = ?";
+
+        try(Connection conn = DatabaseConnection.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, url);
+            try(ResultSet rs = stmt.executeQuery()) {
+                if(rs.next()) {
+                    return rs.getString("NewsID");
+                } else {
+                    System.out.println("No news found with url: " + url);
+                    return null;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error retrieving ID for url: " + url);
             return null;
         }
     }
@@ -163,10 +194,61 @@ public class DatabaseManager {
 
         } catch (SQLException e) {
             System.err.println("Error retrieving news from category table: " + tableName);
-            e.printStackTrace();
         }
 
         return newsList.toArray(new String[0]);
+    }
+
+    public static String[] takeNewsInfo(String newsID)
+    {
+        String sql = "SELECT Title, URL FROM news WHERE NewsID = ?";
+        String[] info = null;
+
+        try(Connection conn = DatabaseConnection.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, newsID);
+            try(ResultSet rs = stmt.executeQuery()) {
+                if(rs.next()) {
+                    String col1 = rs.getString(1);
+                    String col2 = rs.getString(2);
+
+                    info = new String[]{col1, col2};
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error retrieving info for NewsID: " + newsID);
+            return null;
+        }
+
+        return info;
+    }
+
+    public static String[][] getAllNews(){
+        String sql = "SELECT Title, URL FROM news";
+        List<String[]> newsList = new ArrayList<>();
+
+        try(Connection conn = DatabaseConnection.getConnection();
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery()) {
+
+            while(rs.next()) {
+                String col1 = rs.getString(1);
+                String col2 = rs.getString(2);
+
+                newsList.add(new String[]{col1, col2});
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error retrieving news.");
+        }
+
+        String[][] result = new String[newsList.size()][2];
+        for (int i = 0; i < newsList.size(); i++) {
+            result[i] = newsList.get(i);
+        }
+
+        return result;
     }
 
     public static String[] getAllCategory() {
@@ -183,7 +265,6 @@ public class DatabaseManager {
 
         } catch (SQLException e) {
             System.err.println("Error retrieving categories.");
-            e.printStackTrace();
         }
 
         return categoryList.toArray(new String[0]);
@@ -202,7 +283,6 @@ public class DatabaseManager {
             return rs.next();
 
         } catch (Exception e) {
-            e.printStackTrace();
             return false;
         }
     }
