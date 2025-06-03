@@ -5,6 +5,7 @@ import opennlp.tools.tokenize.SimpleTokenizer;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
 public class NewsCategorizer {
@@ -12,7 +13,7 @@ public class NewsCategorizer {
         ArrayList<String> result = new ArrayList<String>();
         try {
             // Load the trained model
-            FileInputStream modelIn = new FileInputStream("model/newsCategorizerModelV3.0.bin");
+            InputStream modelIn = NewsCategorizer.class.getClassLoader().getResourceAsStream("model/newsCategorizerModelV3.0.bin");
             DoccatModel model = new DoccatModel(modelIn);
             modelIn.close();
 
