@@ -8,9 +8,7 @@ import opennlp.tools.util.InputStreamFactory;
 import opennlp.tools.util.PlainTextByLineStream;
 import opennlp.tools.util.TrainingParameters;
 import opennlp.tools.util.ObjectStream;
-
 import java.io.*;
-
 public class Trainer {
     public static void main(String[] args) {
         try {

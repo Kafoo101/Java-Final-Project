@@ -1,4 +1,5 @@
 package myJava;
+import jakarta.mail.MessagingException;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.application.Application;
@@ -17,6 +18,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Alert;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.VBox;
@@ -27,11 +29,14 @@ import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import javafx.stage.Screen;
+
+import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Optional;
 import javafx.util.Callback;
 import javafx.util.Duration;
 import javafx.animation.KeyFrame;
@@ -42,30 +47,35 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import myJava.DatabaseManager;
-import myJava.misc.DatabaseConnection;
 import myJava.misc.addURL;
 import myJava.misc.addNewsToCat;
+import myJava.misc.JavaMailer;
 
 public class NewsPortal extends Application{
-    private ComboBox<String> catComboBox = new ComboBox<>();
-    private ListView<String> newsList = new ListView<>();
-    private Button addNews = new Button("placeholder");
-    private WebView web = new WebView();
-    private WebEngine engine = web.getEngine();
-    private TextField UrlField = new TextField();
-    private String defaultURL = "https://edition.cnn.com";
+    private final ComboBox<String> catComboBox = new ComboBox<>();
+    private final ListView<String> newsList = new ListView<>();
+    private final Button addNews = new Button("placeholder");
+    private final WebView web = new WebView();
+    private final WebEngine engine = web.getEngine();
+    private final TextField UrlField = new TextField();
+    private final String defaultURL = "https://edition.cnn.com";
     private Stage primaryStage;
     private VBox leftContainer;
     private VBox rightContainer;
-    private double leftWidth = 488;
-    private double fullWidth = 1290;
+    private final double leftWidth = 543;
+    private final double fullWidth = 1350;
     private boolean firstTimeExpand = true;
 
     public static void main(String[] args)
     {
         launch(args);
     }
+
+    private boolean isValidEmail(String email) {
+        String regex = "^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}$";
+        return email != null && email.matches(regex);
+    }
+
 
     public void animateStageWidth(Stage stage, double targetWidth) {
         if (firstTimeExpand) {
@@ -101,11 +111,11 @@ public class NewsPortal extends Application{
         primaryStage.setTitle("News Portal");
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: #E8DCCB;");
-        Scene scene = new Scene(root, 470, 600);
+        Scene scene = new Scene(root, 530, 600);
 
         //left area
         leftContainer = new VBox();
-        leftContainer.setMinWidth(470);
+        leftContainer.setMinWidth(530);
         leftContainer.setAlignment(Pos.TOP_LEFT);
 
         HBox categorySelect = new HBox(5);
@@ -136,7 +146,7 @@ public class NewsPortal extends Application{
         addNews.setPrefHeight(25);
         addNews.setStyle("-fx-font-size: 11px;");
         toolbox.getChildren().add(addNews);
-        newsList.setMinWidth(470);
+        newsList.setMinWidth(530);
         newsList.setMinHeight(536);
         newsList.setStyle("-fx-font-family: 'Consolas', 'Courier New', monospace; -fx-font-size: 12px;");
         listContainer.getChildren().add(toolbox);
@@ -225,7 +235,7 @@ public class NewsPortal extends Application{
         Map<String, String> titleToURL = new LinkedHashMap<>();
         if(category.equals("showall"))
         {
-            String[][] queryResult = dao.getAllNews();
+            String[][] queryResult = DatabaseManager.getAllNews();
             for(int i = 0; i < queryResult.length; i++)
             {
                 String title = queryResult[i][0];
@@ -244,10 +254,10 @@ public class NewsPortal extends Application{
         }
         else
         {
-            String[] queryResult = dao.getNewsFromCategory(category);
+            String[] queryResult = DatabaseManager.getNewsFromCategory(category);
             for(int i = 0; i < queryResult.length; i++)
             {
-                String[] q2 = dao.takeNewsInfo(queryResult[i]);
+                String[] q2 = DatabaseManager.takeNewsInfo(queryResult[i]);
                 String title = q2[0];
                 String URL = q2[1];
 
@@ -265,8 +275,8 @@ public class NewsPortal extends Application{
                 String resultURL = addNewsToCatWindow.getSelectedUrl();
                 if(resultURL != null)
                 {
-                    String addID = dao.takeNewsID(resultURL);
-                    dao.addNewsToCategoryTable(addID, category);
+                    String addID = DatabaseManager.takeNewsID(resultURL);
+                    DatabaseManager.addNewsToCategoryTable(addID, category);
                     refresh(category);
 
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -293,7 +303,7 @@ public class NewsPortal extends Application{
                     return;
                 }
 
-                // Handle header row
+                // Header row
                 if (title.equals("NEWS")) {
                     Label noHeader = new Label("No.");
                     noHeader.setPrefWidth(40);
@@ -303,17 +313,25 @@ public class NewsPortal extends Application{
                     titleHeader.setPrefWidth(350);
                     titleHeader.setStyle("-fx-padding: 3;");
 
+                    Region sendHeader = new Region();
+                    sendHeader.setPrefWidth(60);
+
                     Region deleteHeader = new Region();
                     deleteHeader.setPrefWidth(60);
 
-                    HBox headerBox = new HBox(noHeader, createVSeparator(), titleHeader, createVSeparator(), deleteHeader);
+                    HBox headerBox;
+                    if (!category.equalsIgnoreCase("showall")) {
+                        headerBox = new HBox(noHeader, createVSeparator(), titleHeader, createVSeparator(), sendHeader, createVSeparator(), deleteHeader);
+                    } else {
+                        headerBox = new HBox(noHeader, createVSeparator(), titleHeader, createVSeparator(), sendHeader);
+                    }
                     headerBox.setStyle("-fx-border-color: transparent transparent black transparent;");
                     setGraphic(headerBox);
                     return;
                 }
 
-                int index = getIndex(); // index includes the header
-                int number = index;     // because header is at index 0
+                int index = getIndex(); // index includes header
+                int number = index;
 
                 Label noLabel = new Label(number + ".");
                 noLabel.setPrefWidth(40);
@@ -329,27 +347,80 @@ public class NewsPortal extends Application{
                     loadPage(url);
                 });
 
+                // Send Label
+                Label sendLabel = new Label("Send");
+                sendLabel.setStyle("-fx-text-fill: blue; -fx-underline: true; -fx-padding: 3;");
+                sendLabel.setPrefWidth(60);
+                sendLabel.setAlignment(Pos.CENTER_LEFT);
+                sendLabel.setOnMouseClicked(e -> {
+                    TextInputDialog dialog = new TextInputDialog();
+                    dialog.setTitle("Send News");
+                    dialog.setHeaderText("Enter recipient's email address:");
+                    dialog.setContentText("Email:");
+
+                    // Set gray italic placeholder
+                    TextField inputField = dialog.getEditor();
+                    inputField.setPromptText("someone@example.com");
+                    inputField.setStyle("-fx-prompt-text-fill: derive(-fx-control-inner-background, -30%); -fx-font-style: italic;");
+
+                    Optional<String> result = dialog.showAndWait();
+                    result.ifPresent(email -> {
+                        if (isValidEmail(email)) {
+                            File pdf = null;
+                            try {
+                                pdf = JavaMailer.generatePDFfromURL(titleToURL.get(title));
+                                JavaMailer.sendEmailWithPDF(email, pdf); // implement this yourself
+                            } catch (IOException | MessagingException ex) {
+                                throw new RuntimeException(ex);
+                            }
+
+                            Alert success = new Alert(Alert.AlertType.INFORMATION);
+                            success.setTitle("Email Sent");
+                            success.setHeaderText(null);
+                            success.setContentText("The news has been sent to " + email);
+                            success.showAndWait();
+                        } else {
+                            Alert error = new Alert(Alert.AlertType.ERROR);
+                            error.setTitle("Invalid Email");
+                            error.setHeaderText(null);
+                            error.setContentText("The email address you entered is malformed or empty.");
+                            error.showAndWait();
+                        }
+                    });
+                });
+
                 HBox row;
+
                 if (!category.equalsIgnoreCase("showall")) {
+                    // Delete Label
                     Label deleteLabel = new Label("Delete");
                     deleteLabel.setStyle("-fx-text-fill: red; -fx-underline: true; -fx-padding: 3;");
                     deleteLabel.setPrefWidth(60);
                     deleteLabel.setAlignment(Pos.CENTER_LEFT);
                     deleteLabel.setOnMouseClicked(e -> {
-                        String newsID = dao.takeNewsID(titleToURL.get(title));
-                        dao.deleteNewsFromCategory(newsID, category);
+                        String newsID = DatabaseManager.takeNewsID(titleToURL.get(title));
+                        DatabaseManager.deleteNewsFromCategory(newsID, category);
                         refresh(category);
 
                         Alert alert = new Alert(Alert.AlertType.INFORMATION);
                         alert.setTitle("Deletion Successful");
-                        alert.setHeaderText(null); // No header
+                        alert.setHeaderText(null);
                         alert.setContentText("The news has been deleted successfully.");
                         alert.showAndWait();
                     });
 
-                    row = new HBox(noLabel, createVSeparator(), titleLabel, createVSeparator(), deleteLabel);
+                    row = new HBox(
+                            noLabel, createVSeparator(),
+                            titleLabel, createVSeparator(),
+                            sendLabel, createVSeparator(),
+                            deleteLabel
+                    );
                 } else {
-                    row = new HBox(noLabel, createVSeparator(), titleLabel, createVSeparator());
+                    row = new HBox(
+                            noLabel, createVSeparator(),
+                            titleLabel, createVSeparator(),
+                            sendLabel
+                    );
                 }
 
                 row.setSpacing(0);
